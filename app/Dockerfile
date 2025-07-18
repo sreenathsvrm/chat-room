@@ -1,10 +1,12 @@
-FROM golang:1.21-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
-COPY . .
-
+# Copy go.mod and go.sum from the parent directory if present, else just go.mod
+COPY ../go.mod ./
+COPY ../go.sum ./
 RUN go mod download
-RUN go build -o main .
+COPY ../ .
+RUN go build -o main ./app
 
 FROM alpine:latest
 WORKDIR /app
