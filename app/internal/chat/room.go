@@ -100,13 +100,20 @@ func (cr *ChatRoom) Leave(clientID string) {
 	}
 }
 
-func (cr *ChatRoom) Send(senderID, text string) {
+func (cr *ChatRoom) Send(senderID, text string) error {
+	cr.mu.RLock()
+	_, exists := cr.clients[senderID]
+	cr.mu.RUnlock()
+	if !exists {
+		return ErrClientNotFound
+	}
 	msg := models.Message{
 		SenderID:  senderID,
 		Message:   text,
 		CreatedAt: time.Now(),
 	}
 	cr.broadcast <- msg
+	return nil
 }
 
 func (cr *ChatRoom) GetMessages(clientID string, since time.Time) ([]models.Message, error) {

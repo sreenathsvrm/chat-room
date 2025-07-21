@@ -165,7 +165,15 @@ func sendHandler(room *chat.ChatRoom) gin.HandlerFunc {
 			return
 		}
 
-		room.Send(req.ClientID, req.Message)
+		err := room.Send(req.ClientID, req.Message)
+		if err != nil {
+			if err.Error() == "client not found" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Please join the room before sending messages."})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{"status": "success"})
 	}
 }

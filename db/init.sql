@@ -1,3 +1,4 @@
+DROP TABLE IF EXISTS messages;
 CREATE TABLE IF NOT EXISTS messages (
     id SERIAL PRIMARY KEY,
     sender_id VARCHAR(255) NOT NULL,
