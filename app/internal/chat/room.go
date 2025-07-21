@@ -103,7 +103,7 @@ func (cr *ChatRoom) Leave(clientID string) {
 func (cr *ChatRoom) Send(senderID, text string) {
 	msg := models.Message{
 		SenderID:  senderID,
-		Text:      text,
+		Message:   text,
 		CreatedAt: time.Now(),
 	}
 	cr.broadcast <- msg
