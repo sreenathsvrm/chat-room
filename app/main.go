@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -30,6 +33,15 @@ func main() {
 		log.Fatal("Failed to connect to database:", err)
 	}
 
+	// Verify DB connection
+	sqldb, err := db.DB()
+	if err != nil {
+		log.Fatal("Failed to get database object:", err)
+	}
+	if err := sqldb.Ping(); err != nil {
+		log.Fatal("Database ping failed:", err)
+	}
+
 	// Auto migrate models
 	if err := db.AutoMigrate(&models.Message{}); err != nil {
 		log.Fatal("Failed to migrate database:", err)
@@ -42,6 +54,22 @@ func main() {
 
 	// Set up Gin router
 	router := gin.Default()
+
+	// Custom logger middleware
+	router.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
+		return fmt.Sprintf("%s - [%s] \"%s %s %s %d %s\" %s\n",
+			param.ClientIP,
+			param.TimeStamp.Format(time.RFC1123),
+			param.Method,
+			param.Path,
+			param.Request.Proto,
+			param.StatusCode,
+			param.Latency,
+			param.ErrorMessage,
+		)
+	}))
+	// Recovery middleware
+	router.Use(gin.Recovery())
 
 	// API routes
 	api := router.Group("/api")
@@ -63,8 +91,26 @@ func main() {
 		port = "8080"
 	}
 
-	log.Printf("Server starting on :%s", port)
-	log.Fatal(router.Run(":" + port))
+	httpServer := &http.Server{
+		Addr:    ":" + port,
+		Handler: router,
+	}
+
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("Server closed: %v", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := httpServer.Shutdown(ctx); err != nil {
+		log.Fatal("Forced shutdown:", err)
+	}
 }
 
 func joinHandler(room *chat.ChatRoom) gin.HandlerFunc {
@@ -142,7 +188,7 @@ func messagesHandler(room *chat.ChatRoom) gin.HandlerFunc {
 			}
 			since = time.Unix(unixTime, 0)
 		} else {
-			since = time.Now().Add(-24 * time.Hour) // Default to last 24 hours
+			since = time.Time{} // zero time, will return all messages
 		}
 
 		// Long polling with timeout
